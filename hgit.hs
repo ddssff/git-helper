@@ -98,7 +98,7 @@ data GitCommand =
   | Pull
   | Push
   | Reset (Set ResetOption)
-  | Show String
+  | Show (Set ShowOption) String
   deriving Show
 
 gitCreateProcess :: Git -> CreateProcess
@@ -113,7 +113,7 @@ gitCreateProcess (Git opts mcmd) =
     args Pull = ["pull"]
     args Push = ["push"]
     args (Reset opts) = ("reset" : fmap prettyShow (Set.toList opts))
-    args (Show s) = ["show", s]
+    args (Show opts s) = ("show" : fmap prettyShow (Set.toList opts) <> [s])
 
 -- * Sub-parsers
 
@@ -162,15 +162,29 @@ gitResetP :: Parser GitCommand
 gitResetP = Reset <$> opts
   where
     opts :: Parser (Set ResetOption)
-    opts = toOption ResetHard <$> switch (long "hard")
+    opts = (<>) <$> (toOption ResetHard <$> switch (long "hard"))
+                <*> (toOption ResetHelp <$> switch (long "help"))
 
-data ResetOption = ResetHard deriving (Show, Eq, Ord)
+data ResetOption =
+    ResetHard
+  | ResetHelp
+  deriving (Show, Eq, Ord)
 
-instance Pretty ResetOption where pPrint ResetHard = text "hard"
+instance Pretty ResetOption where
+  pPrint ResetHard = text "--hard"
+  pPrint ResetHelp = text "--help"
 
 -- | Show
 gitShowP :: Parser GitCommand
-gitShowP = Show <$> argument str (metavar "COMMIT")
+gitShowP = Show <$> opts <*> argument str (metavar "COMMIT")
+  where
+    opts :: Parser (Set ShowOption)
+    opts = toOption ShowHelp <$> switch (long "help")
+
+data ShowOption = ShowHelp deriving (Show, Eq, Ord)
+
+instance Pretty ShowOption where
+  pPrint ShowHelp = text "--help"
 
 -- * Argument types
 
