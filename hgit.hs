@@ -26,19 +26,18 @@ import Control.Applicative.HT
 main :: IO ()
 main = do
   args <- getArgs
-  git <- withArgs args (execParser (info gitP fullDesc))
-  putStrLn ("-- " <> show git <> " :: " <> show (typeOf git))
-  gitRun git
+  gitCommand <- withArgs args (execParser (info gitP fullDesc))
+  putStrLn ("-- " <> show gitCommand <> " :: " <> show (typeOf gitCommand))
+  git gitCommand
 
--- | gitCreateProcess (withArgs ["--help"] (execParser (info gitAdd fullDesc)))
-gitRun :: Git -> IO ()
-gitRun git@(Git gitopts _)
+git :: Git -> IO ()
+git gitCommand@(Git gitopts _)
   | member GitDryRun gitopts = do
-      putStrLn (show git)
-      putStrLn (show (gitCreateProcess git))
-      putStrLn (showCreateProcessForUser (gitCreateProcess git))
-gitRun git = do
-  let p = gitCreateProcess git
+      putStrLn (show gitCommand)
+      putStrLn (show (gitCreateProcess gitCommand))
+      putStrLn (showCreateProcessForUser (gitCreateProcess gitCommand))
+git gitCommand = do
+  let p = gitCreateProcess gitCommand
   putStrLn ("-- " <> showCreateProcessForUser p <> " :: " <> show (typeOf p))
   readCreateProcessWithExitCode p "" >>= \case
     (ExitSuccess, out, "") -> putStr out
