@@ -30,20 +30,6 @@ main = do
   putStrLn ("-- " <> show git <> " :: " <> show (typeOf git))
   gitRun git
 
-gitCreateProcess :: Git -> CreateProcess
-gitCreateProcess (Git opts mcmd) =
-  proc "git" (fmap prettyShow (Set.toList opts) <> maybe [] args mcmd)
-  where
-    args (Add os ps) =
-      "add" : fmap prettyShow (Set.toList os) <> fmap prettyShow ps
-    args (Checkout path) = ["checkout", path]
-    args (Clone repo mdir) =
-      ["clone", repo] <> maybe [] (: []) mdir
-    args Pull = ["pull"]
-    args Push = ["push"]
-    args (Reset opts) = ("reset" : fmap prettyShow (Set.toList opts))
-    args (Show s) = ["show", s]
-
 -- | gitCreateProcess (withArgs ["--help"] (execParser (info gitAdd fullDesc)))
 gitRun :: Git -> IO ()
 gitRun git@(Git gitopts _)
@@ -68,12 +54,12 @@ gitRun git = do
 -- * Parsers
 
 -- | Global git parser
-gitP :: Opt.Parser Git
+gitP :: Parser Git
 gitP = Git <$> gitOptionsP <*> optional gitCommandP
 
 data Git = Git (Set GitOption) (Maybe GitCommand) deriving Show
 
-gitOptionsP :: Opt.Parser (Set GitOption)
+gitOptionsP :: Parser (Set GitOption)
 gitOptionsP =
   lift3 (\a b c -> a <> b <> c)
     (toOption GitHelp <$> switch (long "help"))
@@ -93,16 +79,16 @@ instance Pretty GitOption where
   pPrint GitVersion = text "--version"
 
 -- | Git sub-command parser
-gitCommandP :: Opt.Parser GitCommand
+gitCommandP :: Parser GitCommand
 gitCommandP = subparser $
        mconcat
-       [ command "add" (info gitAdd (progDesc "git add command"))
-       , command "clone" (info gitClone (progDesc "git clone command"))
-       , command "checkout" (info gitCheckout (progDesc "git checkout command"))
-       , command "pull" (info gitPull (progDesc "git pull command"))
-       , command "push" (info gitPush (progDesc "git push command"))
-       , command "reset" (info gitReset (progDesc "git reset command"))
-       , command "show" (info gitShow (progDesc "git show command"))
+       [ command "add" (info gitAddP (progDesc "git add command"))
+       , command "clone" (info gitCloneP (progDesc "git clone command"))
+       , command "checkout" (info gitCheckoutP (progDesc "git checkout command"))
+       , command "pull" (info gitPullP (progDesc "git pull command"))
+       , command "push" (info gitPushP (progDesc "git push command"))
+       , command "reset" (info gitResetP (progDesc "git reset command"))
+       , command "show" (info gitShowP (progDesc "git show command"))
        ]
 
 data GitCommand =
@@ -115,15 +101,29 @@ data GitCommand =
   | Show String
   deriving Show
 
+gitCreateProcess :: Git -> CreateProcess
+gitCreateProcess (Git opts mcmd) =
+  proc "git" (fmap prettyShow (Set.toList opts) <> maybe [] args mcmd)
+  where
+    args (Add os ps) =
+      "add" : fmap prettyShow (Set.toList os) <> fmap prettyShow ps
+    args (Checkout path) = ["checkout", path]
+    args (Clone repo mdir) =
+      ["clone", repo] <> maybe [] (: []) mdir
+    args Pull = ["pull"]
+    args Push = ["push"]
+    args (Reset opts) = ("reset" : fmap prettyShow (Set.toList opts))
+    args (Show s) = ["show", s]
+
 -- * Sub-parsers
 
 -- | Add
 -- > > withArgs ["--patch", "file1", "file2"] (execParser (info gitAdd fullDesc))
 -- > Add (fromList [Patch]) [PathSpecPath "file1",PathSpecPath "file2"]
-gitAdd :: Opt.Parser GitCommand
-gitAdd = Add <$> opts <*> many pathSpec
+gitAddP :: Parser GitCommand
+gitAddP = Add <$> opts <*> many pathSpec
   where
-    opts :: Opt.Parser (Set AddOption)
+    opts :: Parser (Set AddOption)
     opts = lift2 (\a b -> a <> b)
              (toOption AddPatch <$> switch (long "patch" <> short 'p'))
              (toOption AddHelp <$> switch (long "help"))
@@ -135,8 +135,8 @@ instance Pretty AddOption where
   pPrint AddHelp = text "--help"
 
 -- | Clone
-gitClone :: Opt.Parser GitCommand
-gitClone =
+gitCloneP :: Parser GitCommand
+gitCloneP =
   Clone <$> repository <*> optional directory
   where
     repository = argument str (metavar "URL")
@@ -146,20 +146,20 @@ type Repository = String
 type Directory = String
 
 -- | Checkout
-gitCheckout :: Opt.Parser GitCommand
-gitCheckout = Checkout <$> argument str (metavar "PATH")
+gitCheckoutP :: Parser GitCommand
+gitCheckoutP = Checkout <$> argument str (metavar "PATH")
 
 -- | Pull
-gitPull :: Opt.Parser GitCommand
-gitPull = pure Pull
+gitPullP :: Parser GitCommand
+gitPullP = pure Pull
 
 -- | Push
-gitPush :: Opt.Parser GitCommand
-gitPush = pure Push
+gitPushP :: Parser GitCommand
+gitPushP = pure Push
 
 -- | Reset
-gitReset :: Opt.Parser GitCommand
-gitReset = Reset <$> opts
+gitResetP :: Parser GitCommand
+gitResetP = Reset <$> opts
   where
     opts :: Parser (Set ResetOption)
     opts = toOption ResetHard <$> switch (long "hard")
@@ -169,15 +169,15 @@ data ResetOption = ResetHard deriving (Show, Eq, Ord)
 instance Pretty ResetOption where pPrint ResetHard = text "hard"
 
 -- | Show
-gitShow :: Opt.Parser GitCommand
-gitShow = Show <$> argument str (metavar "COMMIT")
+gitShowP :: Parser GitCommand
+gitShowP = Show <$> argument str (metavar "COMMIT")
 
 -- * Argument types
 
-data PathSpec = PathSpecPath FilePath deriving Show
+data PathSpec = PathSpecPath FilePath deriving (Show, Eq, Ord)
 instance Pretty PathSpec where pPrint (PathSpecPath path) = text path
 
-pathSpec :: Opt.Parser PathSpec
+pathSpec :: Parser PathSpec
 pathSpec = PathSpecPath <$> argument str (metavar "PATH")
 
 -- * Utilities
